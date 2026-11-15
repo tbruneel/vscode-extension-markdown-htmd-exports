@@ -6,8 +6,11 @@ This engineering reference covers the `markdown-it` conversion pipeline, active 
 
 ```text
 vscode-extension-markdown-html/
-├── .gitignore                        # Ignores *.htmd, node_modules/, dist/, *.vsix, .DS_Store
-├── .vscodeignore                     # Excludes src/, tsconfig.json, docs/, .agents/, **/*.htmd; keeps highlight.js styles
+├── .gitignore                        # Ignores *.htmd, node_modules/, dist/, build/, *.vsix, .DS_Store
+├── .vscodeignore                     # Excludes src/, build.ps1, build/, docs/, .agents/, **/*.htmd; keeps highlight.js styles
+├── assets/
+│   └── icon.png                      # 256x256 Marketplace extension icon
+├── build.ps1                         # Type-checks, bundles, and packages build\<repo>-v<ver>.vsix
 ├── license.md                        # MIT license
 ├── package.json                      # Manifest declaring viewer, commands, settings & esbuild scripts
 ├── tsconfig.json                     # TypeScript compiler configuration
@@ -111,16 +114,15 @@ On first activation on Windows (`process.platform === 'win32'`, tracked via `glo
 ## 6. Build, Debug & Packaging
 
 ```powershell
-# Install dependencies and type-check
-npm install
-npm run check
+# Type-check, bundle dist/extension.js, and output build\vscode-extension-markdown-html-v<version>.vsix
+.\build.ps1
 
-# Bundle dist/extension.js with esbuild
-npm run build
+# Package and immediately install into Microsoft VS Code
+.\build.ps1 -Install
 
-# Verify included files and package into a local .vsix archive
+# Equivalent npm wrapper or manual inspection commands
+npm run package
 npx @vscode/vsce ls
-npx @vscode/vsce package
 ```
 
-Packaging omits `--no-dependencies` intentionally because [`.vscodeignore`](../.vscodeignore) blocks `node_modules/**` while whitelisting `!node_modules/highlight.js/styles/**` so optional `highlightStyle` themes remain available at runtime alongside `dist/extension.js`, `styles/`, `template/template.html`, `package.json`, `license.md`, and `readme.md` (excluding `src/**`, `docs/**`, `.agents/**`, and `**/*.htmd`).
+[`build.ps1`](../build.ps1) intentionally omits `--no-dependencies` because [`.vscodeignore`](../.vscodeignore) blocks `node_modules/**` while whitelisting `!node_modules/highlight.js/styles/**` so optional `highlightStyle` themes remain available at runtime alongside `assets/icon.png`, `dist/extension.js`, `styles/`, `template/template.html`, `package.json`, `license.md`, and `readme.md` (excluding `src/**`, `build.ps1`, `build/**`, `docs/**`, `.agents/**`, and `**/*.htmd`).

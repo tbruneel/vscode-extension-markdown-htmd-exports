@@ -9,3 +9,5 @@ package-lock.json
 **/*.htmd
 docs/**
 .agents/**
+build.ps1
+build/**
