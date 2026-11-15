@@ -628,7 +628,7 @@ function collectCssVariables(
 /**
  * Resolves VS Code's active color theme, workbench.colorCustomizations, and
  * markdown.preview typography onto `:root` (never `body`), so exported `.htmd`
- * files preserve VS Code's theme in browsers while `Markdown HTML Viewer` inside
+ * files preserve VS Code's theme in browsers while `Markdown HTMD Exports Viewer` inside
  * VS Code still lets `<html>` inline `--vscode-*` variables win for live switching.
  */
 export function resolveActiveVscodeThemeContext(resource?: vscode.Uri): ActiveVscodeThemeContext {

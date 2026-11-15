@@ -17,25 +17,25 @@ import markdownItKatex from '@vscode/markdown-it-katex';
 import { mathFencePlugin } from './markdown-it-math-fence';
 import { mathBracketsPlugin } from './markdown-it-math-brackets';
 import { renderMath } from './math-renderer';
-import { MarkdownHtmlViewerProvider } from './html-viewer';
+import { MarkdownHtmdExportsViewerProvider } from './html-viewer';
 import { ensureWindowsHtmdAssociation } from './windows-association';
 import { resolveActiveVscodeThemeContext } from './vscode-theme';
 
 const EXTENSION_ROOT = path.join(__dirname, '..');
-const MARKDOWN_ALERT_EXTENSION_ID = 'tbruneel.markdown-alert';
+const MARKDOWN_ALERTS_EXTENSION_ID = 'tbruneel.markdown-alerts';
 const MARKDOWN_STYLESHEETS_EXTENSION_ID = 'tbruneel.markdown-stylesheets';
 const runtimeRequire = createRequire(path.join(EXTENSION_ROOT, 'package.json'));
 const SHOW_DETAILS_ACTION = 'Show Details';
 const ASSOC_INIT_KEY = 'htmdAssociationInitialized';
 
 function getConfig<T>(key: string, defaultValue: T, resource?: vscode.Uri): T {
-  return vscode.workspace.getConfiguration('markdown-html', resource).get<T>(key, defaultValue);
+  return vscode.workspace.getConfiguration('markdown-htmd-exports', resource).get<T>(key, defaultValue);
 }
 
 export function activate(context: vscode.ExtensionContext): void {
   logger.initializeLogger(
     context,
-    () => vscode.window.createOutputChannel('Markdown HTML', { log: true }),
+    () => vscode.window.createOutputChannel('Markdown HTMD Exports', { log: true }),
   );
 
   if (process.platform === 'win32' && !context.globalState.get<boolean>(ASSOC_INIT_KEY, false)) {
@@ -44,17 +44,17 @@ export function activate(context: vscode.ExtensionContext): void {
       .catch((err) => logger.logWarn('Failed to register .htmd file association', logger.formatError(err)));
   }
 
-  const alertExt = vscode.extensions.getExtension(MARKDOWN_ALERT_EXTENSION_ID);
+  const alertExt = vscode.extensions.getExtension(MARKDOWN_ALERTS_EXTENSION_ID);
   if (alertExt && !alertExt.isActive) {
     void alertExt.activate().then(undefined, () => undefined);
   }
 
   context.subscriptions.push(
-    MarkdownHtmlViewerProvider.register(context),
-    vscode.commands.registerCommand('extension.markdown-html.export', async (uri?: vscode.Uri) => {
+    MarkdownHtmdExportsViewerProvider.register(context),
+    vscode.commands.registerCommand('extension.markdown-htmd-exports.export', async (uri?: vscode.Uri) => {
       await exportMarkdownCommand(uri, false);
     }),
-    vscode.commands.registerCommand('extension.markdown-html.showSource', async (uri?: vscode.Uri) => {
+    vscode.commands.registerCommand('extension.markdown-htmd-exports.showSource', async (uri?: vscode.Uri) => {
       await showSourceCommand(uri);
     }),
     vscode.workspace.onDidSaveTextDocument(async (document: vscode.TextDocument) => {
@@ -103,17 +103,17 @@ async function exportMarkdownCommand(uri?: vscode.Uri, isOnSave = false): Promis
     }
 
     if (!document) {
-      vscode.window.showWarningMessage('Markdown HTML: No active Markdown editor.');
+      vscode.window.showWarningMessage('Markdown HTMD Exports: No active Markdown editor.');
       return;
     }
 
     if (document.languageId !== 'markdown') {
-      vscode.window.showWarningMessage('Markdown HTML: Active document is not a Markdown file.');
+      vscode.window.showWarningMessage('Markdown HTMD Exports: Active document is not a Markdown file.');
       return;
     }
 
     if (document.isUntitled || !utils.isExistsPath(document.uri.fsPath)) {
-      vscode.window.showWarningMessage('Markdown HTML: Please save the Markdown file before exporting.');
+      vscode.window.showWarningMessage('Markdown HTMD Exports: Please save the Markdown file before exporting.');
       return;
     }
 
@@ -124,7 +124,7 @@ async function exportMarkdownCommand(uri?: vscode.Uri, isOnSave = false): Promis
 
     exportDocumentToHtml(document, targetFilename, isOnSave);
   } catch (error) {
-    reportError('Markdown HTML: Export failed.', error);
+    reportError('Markdown HTMD Exports: Export failed.', error);
   }
 }
 
@@ -140,18 +140,18 @@ async function showSourceCommand(uri?: vscode.Uri): Promise<void> {
     }
 
     if (!htmlFilePath) {
-      htmlFilePath = MarkdownHtmlViewerProvider.getActiveFilePath();
+      htmlFilePath = MarkdownHtmdExportsViewerProvider.getActiveFilePath();
     }
 
     if (!htmlFilePath) {
-      vscode.window.showWarningMessage('Markdown HTML: No active .htmd viewer.');
+      vscode.window.showWarningMessage('Markdown HTMD Exports: No active .htmd viewer.');
       return;
     }
 
     const mdFilePath = utils.resolveSourceMdFilename(htmlFilePath);
     if (!utils.isExistsPath(mdFilePath)) {
       vscode.window.showWarningMessage(
-        `Markdown HTML: Source Markdown file not found (${path.basename(mdFilePath)}).`,
+        `Markdown HTMD Exports: Source Markdown file not found (${path.basename(mdFilePath)}).`,
       );
       return;
     }
@@ -164,7 +164,7 @@ async function showSourceCommand(uri?: vscode.Uri): Promise<void> {
     const document = await vscode.workspace.openTextDocument(mdUri);
     await vscode.window.showTextDocument(document, existingEditor ? existingEditor.viewColumn : undefined);
   } catch (error) {
-    reportError('Markdown HTML: Failed to open source Markdown file.', error);
+    reportError('Markdown HTMD Exports: Failed to open source Markdown file.', error);
   }
 }
 
@@ -192,7 +192,7 @@ export function exportDocumentToHtml(
 
   try {
     fs.writeFileSync(exportFilename, html, 'utf-8');
-    MarkdownHtmlViewerProvider.refreshFile(exportFilename);
+    MarkdownHtmdExportsViewerProvider.refreshFile(exportFilename);
     const timeout = getConfig<number>('StatusbarMessageTimeout', 5000, document.uri);
     vscode.window.setStatusBarMessage('$(markdown) Exported ' + path.basename(exportFilename), timeout);
     logger.logInfo('Exported: ' + exportFilename);
@@ -283,7 +283,7 @@ export function convertMarkdownToHtml(
     // GitHub-compatible heading id slugs
     md.use(markdownItNamedHeaders, { slugify: utils.Slug });
 
-    // Delegate GitHub blockquote alerts (> [!NOTE] .. > [!CAUTION]) to Markdown Alert when installed
+    // Delegate GitHub blockquote alerts (> [!NOTE] .. > [!CAUTION]) to Markdown Alerts when installed
     applyMarkdownAlertExtension(md);
 
     // Math rendering via KaTeX ($...$, $$...$$, \(...\), \[...\], ```math)
@@ -337,13 +337,13 @@ export function makeHtml(data: string, uri: vscode.Uri, exportFilename?: string)
     const style = readStyles(uri, data, themeContext.rootVarsStyleTag) || '';
     const scripts = readExtensionPreviewScripts(
       MARKDOWN_STYLESHEETS_EXTENSION_ID,
-      './scripts/copy-code-button.js',
+      './source/copy-code-button.js',
     );
     const title = path.basename(uri.fsPath);
     const source = exportFilename
       ? path.relative(path.dirname(exportFilename), uri.fsPath).replace(/\\/g, '/')
       : path.basename(uri.fsPath);
-    const templatePath = path.join(EXTENSION_ROOT, 'template', 'template.html');
+    const templatePath = path.join(EXTENSION_ROOT, 'source', 'template.html');
     const template = utils.readFile(templatePath) as string;
 
     const view = utils.buildHtmlViewData({
@@ -415,7 +415,7 @@ function readExtensionPreviewScripts(extensionId: string, fallbackRelativePath: 
 }
 
 function applyMarkdownAlertExtension(md: markdownIt): void {
-  const alertExt = vscode.extensions?.getExtension?.(MARKDOWN_ALERT_EXTENSION_ID);
+  const alertExt = vscode.extensions?.getExtension?.(MARKDOWN_ALERTS_EXTENSION_ID);
   if (!alertExt) {
     return;
   }
@@ -429,7 +429,7 @@ function applyMarkdownAlertExtension(md: markdownIt): void {
     }
 
     const pkg = alertExt.packageJSON as { main?: string } | undefined;
-    const mainRel = pkg?.main || './dist/extension.js';
+    const mainRel = pkg?.main || './build/extension.js';
     const mainPath = path.resolve(alertExt.extensionPath, mainRel);
     if (fs.existsSync(mainPath)) {
       const mod = runtimeRequire(mainPath) as {
@@ -443,7 +443,7 @@ function applyMarkdownAlertExtension(md: markdownIt): void {
       }
     }
   } catch (error) {
-    logger.logWarn(`Failed to load ${MARKDOWN_ALERT_EXTENSION_ID}: ${logger.formatError(error)}`);
+    logger.logWarn(`Failed to load ${MARKDOWN_ALERTS_EXTENSION_ID}: ${logger.formatError(error)}`);
   }
 }
 
@@ -456,9 +456,9 @@ function readStyles(uri: vscode.Uri, htmlBody: string, rootVarsStyleTag: string)
     const customStyles = getConfig<string[]>('styles', [], uri);
     const extensionPreviewStyleFiles = [
       ...getExtensionContributedAssets(
-        MARKDOWN_ALERT_EXTENSION_ID,
+        MARKDOWN_ALERTS_EXTENSION_ID,
         'markdown.previewStyles',
-        './styles/markdown-alert.css',
+        './styles/markdown-alerts.css',
       ),
       ...getExtensionContributedAssets(
         MARKDOWN_STYLESHEETS_EXTENSION_ID,
@@ -479,7 +479,7 @@ function readStyles(uri: vscode.Uri, htmlBody: string, rootVarsStyleTag: string)
         extensionPreviewStyleFiles,
         onMissingHighlightStyle: (requestedStyle: string, resolvedStyle: string) => {
           vscode.window.showWarningMessage(
-            `Markdown HTML: highlightStyle "${requestedStyle}" was not found; falling back to "${resolvedStyle}".`,
+            `Markdown HTMD Exports: highlightStyle "${requestedStyle}" was not found; falling back to "${resolvedStyle}".`,
           );
         },
         resolveHrefFn: (href: string) => fixHref(uri, href) || '',

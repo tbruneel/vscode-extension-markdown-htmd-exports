@@ -41,15 +41,15 @@ const ANCHOR_NAV_SCRIPT = `
 </script>
 `;
 
-export class MarkdownHtmlViewerProvider implements vscode.CustomReadonlyEditorProvider {
-  public static readonly viewType = 'markdown-html.viewer';
+export class MarkdownHtmdExportsViewerProvider implements vscode.CustomReadonlyEditorProvider {
+  public static readonly viewType = 'markdown-htmd-exports.viewer';
   private static readonly activePanels = new Map<string, Set<vscode.WebviewPanel>>();
   private static activeFilePath: string | undefined;
 
   public static register(context: vscode.ExtensionContext): vscode.Disposable {
-    const provider = new MarkdownHtmlViewerProvider();
+    const provider = new MarkdownHtmdExportsViewerProvider();
     return vscode.window.registerCustomEditorProvider(
-      MarkdownHtmlViewerProvider.viewType,
+      MarkdownHtmdExportsViewerProvider.viewType,
       provider,
       {
         webviewOptions: { retainContextWhenHidden: true },
@@ -59,16 +59,16 @@ export class MarkdownHtmlViewerProvider implements vscode.CustomReadonlyEditorPr
   }
 
   public static getActiveFilePath(): string | undefined {
-    return MarkdownHtmlViewerProvider.activeFilePath;
+    return MarkdownHtmdExportsViewerProvider.activeFilePath;
   }
 
   public static refreshFile(filePath: string): void {
     const key = path.normalize(filePath).toLowerCase();
-    const panels = MarkdownHtmlViewerProvider.activePanels.get(key);
+    const panels = MarkdownHtmdExportsViewerProvider.activePanels.get(key);
     if (!panels || panels.size === 0) {
       return;
     }
-    const html = MarkdownHtmlViewerProvider.loadHtml(filePath);
+    const html = MarkdownHtmdExportsViewerProvider.loadHtml(filePath);
     for (const panel of panels) {
       panel.webview.html = html;
     }
@@ -111,25 +111,25 @@ export class MarkdownHtmlViewerProvider implements vscode.CustomReadonlyEditorPr
       localResourceRoots: [vscode.Uri.file(path.dirname(filePath))],
     };
 
-    let set = MarkdownHtmlViewerProvider.activePanels.get(key);
+    let set = MarkdownHtmdExportsViewerProvider.activePanels.get(key);
     if (!set) {
       set = new Set();
-      MarkdownHtmlViewerProvider.activePanels.set(key, set);
+      MarkdownHtmdExportsViewerProvider.activePanels.set(key, set);
     }
     set.add(webviewPanel);
     if (webviewPanel.active) {
-      MarkdownHtmlViewerProvider.activeFilePath = filePath;
+      MarkdownHtmdExportsViewerProvider.activeFilePath = filePath;
     }
 
     webviewPanel.onDidChangeViewState((e) => {
       if (e.webviewPanel.active) {
-        MarkdownHtmlViewerProvider.activeFilePath = filePath;
-      } else if (MarkdownHtmlViewerProvider.activeFilePath === filePath) {
-        MarkdownHtmlViewerProvider.activeFilePath = undefined;
+        MarkdownHtmdExportsViewerProvider.activeFilePath = filePath;
+      } else if (MarkdownHtmdExportsViewerProvider.activeFilePath === filePath) {
+        MarkdownHtmdExportsViewerProvider.activeFilePath = undefined;
       }
     });
 
-    webviewPanel.webview.html = MarkdownHtmlViewerProvider.loadHtml(filePath);
+    webviewPanel.webview.html = MarkdownHtmdExportsViewerProvider.loadHtml(filePath);
 
     const messageDisposable = webviewPanel.webview.onDidReceiveMessage(async (msg: unknown) => {
       if (!msg || typeof msg !== 'object') {
@@ -162,7 +162,7 @@ export class MarkdownHtmlViewerProvider implements vscode.CustomReadonlyEditorPr
       new vscode.RelativePattern(path.dirname(filePath), path.basename(filePath)),
     );
     const reload = () => {
-      webviewPanel.webview.html = MarkdownHtmlViewerProvider.loadHtml(filePath);
+      webviewPanel.webview.html = MarkdownHtmdExportsViewerProvider.loadHtml(filePath);
     };
     watcher.onDidChange(reload);
     watcher.onDidCreate(reload);
@@ -170,14 +170,14 @@ export class MarkdownHtmlViewerProvider implements vscode.CustomReadonlyEditorPr
     webviewPanel.onDidDispose(() => {
       messageDisposable.dispose();
       watcher.dispose();
-      if (MarkdownHtmlViewerProvider.activeFilePath === filePath) {
-        MarkdownHtmlViewerProvider.activeFilePath = undefined;
+      if (MarkdownHtmdExportsViewerProvider.activeFilePath === filePath) {
+        MarkdownHtmdExportsViewerProvider.activeFilePath = undefined;
       }
-      const panels = MarkdownHtmlViewerProvider.activePanels.get(key);
+      const panels = MarkdownHtmdExportsViewerProvider.activePanels.get(key);
       if (panels) {
         panels.delete(webviewPanel);
         if (panels.size === 0) {
-          MarkdownHtmlViewerProvider.activePanels.delete(key);
+          MarkdownHtmdExportsViewerProvider.activePanels.delete(key);
         }
       }
     });

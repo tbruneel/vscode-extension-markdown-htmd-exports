@@ -1,4 +1,4 @@
-// Shared helpers for the markdown-html extension: file I/O, path and URL
+// Shared helpers for the markdown-htmd-exports extension: file I/O, path and URL
 // resolution, self-contained HTML/CSS/image assembly, and option builders for markdown-it.
 import fs from 'fs';
 import os from 'os';
@@ -127,12 +127,12 @@ const IMAGE_MIME: Record<string, string> = {
  * Returns '' when the KaTeX CSS file is not present at the expected location.
  */
 export function buildKatexStyleTag(baseDir: string): string {
-  const cssPath = path.join(baseDir, 'styles', 'katex', 'katex.min.css');
+  const cssPath = path.join(baseDir, 'assets', 'katex', 'katex.min.css');
   const rawCss = readFile(cssPath);
   if (typeof rawCss !== 'string' || !rawCss) {
     return '';
   }
-  const katexDir = path.join(baseDir, 'styles', 'katex');
+  const katexDir = path.join(baseDir, 'assets', 'katex');
   const urlRe = /url\(\s*(['"]?)([^'")]+)\1\s*\)/g;
   const inlined = rawCss.replace(urlRe, function (match, _quote, href: string) {
     if (/^(data:|https?:|file:)/i.test(href)) {
@@ -327,7 +327,7 @@ function inlineOrLinkStylesheet(resolvedHref: string): string {
  * 2. Bundled `vscode-markdown.css` base styles (when `includeDefaultStyles` is enabled)
  * 3. Syntax highlighting (`vscode-highlight.css` or explicit `highlightStyle`)
  * 4. Companion extension `markdown.previewStyles` (e.g., `markdown-alert`, `markdown-stylesheets`)
- * 5. `markdown.styles` and `markdown-html.styles`
+ * 5. `markdown.styles` and `markdown-htmd-exports.styles`
  */
 export function buildStyleTags(options: BuildStyleTagsOptions): string {
   let style = '';
@@ -607,7 +607,7 @@ export function resolveSourceMdFilename(htmdFilename: string): string {
       const buf = Buffer.alloc(1024);
       const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
       const head = buf.slice(0, bytesRead).toString('utf-8');
-      const match = /<meta[^>]*name="generator"[^>]*content="vscode-markdown-html"[^>]*data-source="([^"]+)"/i.exec(head);
+      const match = /<meta[^>]*name="generator"[^>]*content="vscode-markdown-(?:htmd-exports|htmd|html)"[^>]*data-source="([^"]+)"/i.exec(head);
       if (match) {
         const rawSource = unescapeHtmlAttr(match[1]);
         if (rawSource) {
@@ -864,7 +864,7 @@ export function buildSanitizeSummary(report: SanitizeReport): string {
     parts.push('stripped unsafe attribute(s)');
   }
   const body = parts.length > 0 ? parts.join('; ') : 'sanitized raw HTML';
-  return 'Markdown HTML: ' + body + ' for security. See output for details.';
+  return 'Markdown HTMD Exports: ' + body + ' for security. See output for details.';
 }
 
 export function buildSanitizeLogDetail(report: SanitizeReport, mode: SanitizeMode): string {
@@ -884,7 +884,7 @@ export function buildSanitizeLogDetail(report: SanitizeReport, mode: SanitizeMod
   const head = 'Sanitized raw HTML (mode: ' + mode + ')';
   const lines: string[] = [segments.length > 0 ? head + ': ' + segments.join('; ') + '.' : head + '.'];
   if (report.removedElements.indexOf('style') !== -1) {
-    lines.push('Tip: to keep <style>, set "markdown-html.sanitize": "gfm-allow-style".');
+    lines.push('Tip: to keep <style>, set "markdown-htmd-exports.sanitize": "gfm-allow-style".');
   }
   return lines.join('\n');
 }

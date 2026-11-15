@@ -1,17 +1,17 @@
 {
-  "name": "markdown-html",
-  "displayName": "Markdown HTML",
-  "description": "Exports Markdown files (.md) to self-contained Markdown HTML files (.htmd) which open automatically in VS Code's built-in viewer and your default web browser.",
-  "version": "1.0.0",
+  "name": "markdown-htmd-exports",
+  "displayName": "Markdown HTMD Exports",
+  "description": "Exports Markdown files (.md) to self-contained Markdown HTMD files (.htmd) which open automatically in VS Code's built-in viewer and your default web browser.",
+  "version": "1.0.1",
   "publisher": "tbruneel",
   "license": "MIT",
-  "homepage": "https://github.com/tbruneel/vscode-extension-markdown-html#readme",
+  "homepage": "https://github.com/tbruneel/vscode-extension-markdown-htmd-exports#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tbruneel/vscode-extension-markdown-html.git"
+    "url": "https://github.com/tbruneel/vscode-extension-markdown-htmd-exports.git"
   },
   "bugs": {
-    "url": "https://github.com/tbruneel/vscode-extension-markdown-html/issues"
+    "url": "https://github.com/tbruneel/vscode-extension-markdown-htmd-exports/issues"
   },
   "engines": {
     "vscode": "^1.80.0"
@@ -30,12 +30,12 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:extension.markdown-html.export",
-    "onCommand:extension.markdown-html.showSource",
-    "onCustomEditor:markdown-html.viewer",
+    "onCommand:extension.markdown-htmd-exports.export",
+    "onCommand:extension.markdown-htmd-exports.showSource",
+    "onCustomEditor:markdown-htmd-exports.viewer",
     "onLanguage:markdown"
   ],
-  "main": "./dist/extension.js",
+  "main": "./build/extension.js",
   "contributes": {
     "languages": [
       {
@@ -47,8 +47,8 @@
     ],
     "customEditors": [
       {
-        "viewType": "markdown-html.viewer",
-        "displayName": "Markdown HTML Viewer",
+        "viewType": "markdown-htmd-exports.viewer",
+        "displayName": "Markdown HTMD Exports Viewer",
         "selector": [
           {
             "filenamePattern": "*.htmd"
@@ -59,64 +59,64 @@
     ],
     "commands": [
       {
-        "command": "extension.markdown-html.export",
+        "command": "extension.markdown-htmd-exports.export",
         "title": {
-          "value": "Markdown HTML: Export",
+          "value": "Markdown HTMD Exports: Export",
           "original": "Open Preview to the Side~export"
         },
         "icon": "$(export)",
-        "group": "markdown-html"
+        "group": "markdown-htmd-exports"
       },
       {
-        "command": "extension.markdown-html.showSource",
+        "command": "extension.markdown-htmd-exports.showSource",
         "title": "Open Source File",
         "icon": "$(file-code)",
-        "group": "markdown-html"
+        "group": "markdown-htmd-exports"
       }
     ],
     "menus": {
       "commandPalette": [
         {
           "when": "resourceLangId == markdown",
-          "command": "extension.markdown-html.export"
+          "command": "extension.markdown-htmd-exports.export"
         },
         {
-          "when": "activeCustomEditorId == 'markdown-html.viewer'",
-          "command": "extension.markdown-html.showSource"
+          "when": "activeCustomEditorId == 'markdown-htmd-exports.viewer'",
+          "command": "extension.markdown-htmd-exports.showSource"
         }
       ],
       "editor/title": [
         {
           "when": "editorLangId == markdown",
-          "command": "extension.markdown-html.export",
+          "command": "extension.markdown-htmd-exports.export",
           "group": "navigation@1"
         },
         {
-          "when": "activeCustomEditorId == 'markdown-html.viewer'",
-          "command": "extension.markdown-html.showSource",
+          "when": "activeCustomEditorId == 'markdown-htmd-exports.viewer'",
+          "command": "extension.markdown-htmd-exports.showSource",
           "group": "navigation@3"
         }
       ],
       "editor/context": [
         {
           "when": "resourceLangId == markdown",
-          "command": "extension.markdown-html.export",
-          "group": "markdown-html@1"
+          "command": "extension.markdown-htmd-exports.export",
+          "group": "markdown-htmd-exports@1"
         }
       ],
       "explorer/context": [
         {
           "when": "resourceExtname == .md",
-          "command": "extension.markdown-html.export",
-          "group": "markdown-html@1"
+          "command": "extension.markdown-htmd-exports.export",
+          "group": "markdown-htmd-exports@1"
         }
       ]
     },
     "configuration": {
       "type": "object",
-      "title": "Markdown HTML",
+      "title": "Markdown HTMD Exports",
       "properties": {
-        "markdown-html.convertOnSave": {
+        "markdown-htmd-exports.convertOnSave": {
           "type": "string",
           "enum": [
             "ifExists",
@@ -126,12 +126,12 @@
           "enumDescriptions": [
             "Automatically update <file>.htmd on save only if <file>.htmd already exists next to the Markdown file.",
             "Always create or update <file>.htmd whenever a Markdown file is saved.",
-            "Only export manually via the 'Markdown HTML: Export' command."
+            "Only export manually via the 'Markdown HTMD Exports: Export' command."
           ],
           "default": "ifExists",
           "description": "Control automatic .htmd export when saving a Markdown (.md) file."
         },
-        "markdown-html.convertOnSaveExclude": {
+        "markdown-htmd-exports.convertOnSaveExclude": {
           "type": "array",
           "default": [],
           "items": {
@@ -139,7 +139,7 @@
           },
           "description": "Regex patterns for filenames excluded from convertOnSave."
         },
-        "markdown-html.styles": {
+        "markdown-htmd-exports.styles": {
           "type": "array",
           "default": [],
           "items": {
@@ -147,27 +147,27 @@
           },
           "description": "Local paths or URLs to CSS stylesheets to inline into the exported .htmd file."
         },
-        "markdown-html.stylesRelativePathFile": {
+        "markdown-htmd-exports.stylesRelativePathFile": {
           "type": "boolean",
           "default": false,
-          "description": "Interpret relative paths in markdown-html.styles as relative to the Markdown file."
+          "description": "Interpret relative paths in markdown-htmd-exports.styles as relative to the Markdown file."
         },
-        "markdown-html.includeDefaultStyles": {
+        "markdown-htmd-exports.includeDefaultStyles": {
           "type": "boolean",
           "default": true,
           "description": "Include VS Code's built-in Markdown base stylesheet alongside the active color theme variables, companion preview styles, and any custom markdown.styles."
         },
-        "markdown-html.outputDirectory": {
+        "markdown-htmd-exports.outputDirectory": {
           "type": "string",
           "default": "",
           "description": "Optional output directory for exported .htmd files."
         },
-        "markdown-html.outputDirectoryRelativePathFile": {
+        "markdown-htmd-exports.outputDirectoryRelativePathFile": {
           "type": "boolean",
           "default": false,
-          "description": "Interpret relative markdown-html.outputDirectory paths as relative to the Markdown file."
+          "description": "Interpret relative markdown-htmd-exports.outputDirectory paths as relative to the Markdown file."
         },
-        "markdown-html.sanitize": {
+        "markdown-htmd-exports.sanitize": {
           "type": "string",
           "enum": [
             "gfm",
@@ -177,37 +177,37 @@
           "default": "gfm",
           "description": "Sanitize raw HTML in Markdown per GitHub Flavored Markdown."
         },
-        "markdown-html.highlight": {
+        "markdown-htmd-exports.highlight": {
           "type": "boolean",
           "default": true,
           "description": "Enable syntax highlighting for fenced code blocks."
         },
-        "markdown-html.highlightStyle": {
+        "markdown-htmd-exports.highlightStyle": {
           "type": "string",
           "default": "",
           "description": "Optional highlight.js stylesheet filename (defaults to VS Code's built-in highlight theme)."
         },
-        "markdown-html.breaks": {
+        "markdown-htmd-exports.breaks": {
           "type": "boolean",
           "default": false,
           "description": "Convert single newlines in paragraphs into <br> tags."
         },
-        "markdown-html.emoji": {
+        "markdown-htmd-exports.emoji": {
           "type": "boolean",
           "default": true,
           "description": "Enable native Unicode emoji shortcodes (e.g. :rocket: -> 🚀)."
         },
-        "markdown-html.mermaidServer": {
+        "markdown-htmd-exports.mermaidServer": {
           "type": "string",
           "default": "https://unpkg.com/mermaid/dist/mermaid.min.js",
           "description": "Mermaid script URL (loaded only when the document contains a ```mermaid block)."
         },
-        "markdown-html.math.enabled": {
+        "markdown-htmd-exports.math.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable KaTeX math rendering for $...$, $$...$$, \\(...\\), \\[...\\], and ```math fenced blocks."
         },
-        "markdown-html.math.katex.macros": {
+        "markdown-htmd-exports.math.katex.macros": {
           "type": "object",
           "default": {},
           "additionalProperties": {
@@ -215,7 +215,7 @@
           },
           "markdownDescription": "User-defined KaTeX macros passed to the KaTeX renderer."
         },
-        "markdown-html.StatusbarMessageTimeout": {
+        "markdown-htmd-exports.StatusbarMessageTimeout": {
           "type": "number",
           "default": 5000,
           "description": "Status bar message timeout in milliseconds."
@@ -224,7 +224,7 @@
     }
   },
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --format=cjs --platform=node --external:vscode",
+    "build": "esbuild source/extension.ts --bundle --outfile=build/extension.js --format=cjs --platform=node --external:vscode",
     "check": "tsc --noEmit",
     "watch": "npm run build -- --watch",
     "package": "powershell -NoProfile -ExecutionPolicy Bypass -File ./build.ps1"

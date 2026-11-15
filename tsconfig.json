@@ -10,9 +10,9 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "rootDir": ".",
-    "typeRoots": ["./src/types", "./node_modules/@types"],
+    "typeRoots": ["./source/types", "./node_modules/@types"],
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["source/**/*.ts"],
+  "exclude": ["node_modules", "build"]
 }
