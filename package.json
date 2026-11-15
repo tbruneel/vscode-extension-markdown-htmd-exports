@@ -23,7 +23,7 @@
     "markdown",
     "html",
     "export",
-    "github-alerts",
+    "htmd",
     "katex",
     "mermaid"
   ],
@@ -154,7 +154,7 @@
         "markdown-html.includeDefaultStyles": {
           "type": "boolean",
           "default": true,
-          "description": "When neither 'markdown.styles' nor 'markdown-html.styles' is set, automatically inline the bundled VS Code Light/Dark 2026 stylesheet matching the active VS Code color theme."
+          "description": "Include VS Code's built-in Markdown base stylesheet alongside the active color theme variables, companion preview styles, and any custom markdown.styles."
         },
         "markdown-html.outputDirectory": {
           "type": "string",
@@ -184,7 +184,7 @@
         "markdown-html.highlightStyle": {
           "type": "string",
           "default": "",
-          "description": "Optional highlight.js stylesheet filename (defaults to tomorrow.css)."
+          "description": "Optional highlight.js stylesheet filename (defaults to VS Code's built-in highlight theme)."
         },
         "markdown-html.breaks": {
           "type": "boolean",

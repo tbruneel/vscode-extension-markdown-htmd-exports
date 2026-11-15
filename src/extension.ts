@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { createRequire } from 'module';
 import * as utils from './utils';
 import * as logger from './logger';
 import { installSanitizeRules } from './markdown-it-sanitize';
@@ -12,15 +13,18 @@ import markdownIt from 'markdown-it';
 import { markdownItCheckbox } from './markdown-it-checkbox';
 import { full as markdownItEmojiFull } from 'markdown-it-emoji';
 import { markdownItNamedHeaders } from './markdown-it-named-headers';
-import { markdownItGitHubAlerts } from './markdown-it-github-alerts';
 import markdownItKatex from '@vscode/markdown-it-katex';
 import { mathFencePlugin } from './markdown-it-math-fence';
 import { mathBracketsPlugin } from './markdown-it-math-brackets';
 import { renderMath } from './math-renderer';
 import { MarkdownHtmlViewerProvider } from './html-viewer';
 import { ensureWindowsHtmdAssociation } from './windows-association';
+import { resolveActiveVscodeThemeContext } from './vscode-theme';
 
 const EXTENSION_ROOT = path.join(__dirname, '..');
+const MARKDOWN_ALERT_EXTENSION_ID = 'tbruneel.markdown-alert';
+const MARKDOWN_STYLESHEETS_EXTENSION_ID = 'tbruneel.markdown-stylesheets';
+const runtimeRequire = createRequire(path.join(EXTENSION_ROOT, 'package.json'));
 const SHOW_DETAILS_ACTION = 'Show Details';
 const ASSOC_INIT_KEY = 'htmdAssociationInitialized';
 
@@ -38,6 +42,11 @@ export function activate(context: vscode.ExtensionContext): void {
     void ensureWindowsHtmdAssociation(logger.logInfo, logger.logWarn)
       .then(() => context.globalState.update(ASSOC_INIT_KEY, true))
       .catch((err) => logger.logWarn('Failed to register .htmd file association', logger.formatError(err)));
+  }
+
+  const alertExt = vscode.extensions.getExtension(MARKDOWN_ALERT_EXTENSION_ID);
+  if (alertExt && !alertExt.isActive) {
+    void alertExt.activate().then(undefined, () => undefined);
   }
 
   context.subscriptions.push(
@@ -274,8 +283,8 @@ export function convertMarkdownToHtml(
     // GitHub-compatible heading id slugs
     md.use(markdownItNamedHeaders, { slugify: utils.Slug });
 
-    // GitHub-style blockquote alerts (> [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION])
-    md.use(markdownItGitHubAlerts);
+    // Delegate GitHub blockquote alerts (> [!NOTE] .. > [!CAUTION]) to Markdown Alert when installed
+    applyMarkdownAlertExtension(md);
 
     // Math rendering via KaTeX ($...$, $$...$$, \(...\), \[...\], ```math)
     const mathFrontmatter = getFrontMatterRecord(matterParts.data, 'math') || {};
@@ -324,7 +333,12 @@ export function convertMarkdownToHtml(
 
 export function makeHtml(data: string, uri: vscode.Uri, exportFilename?: string): string | undefined {
   try {
-    const style = readStyles(uri, data) || '';
+    const themeContext = resolveActiveVscodeThemeContext(uri);
+    const style = readStyles(uri, data, themeContext.rootVarsStyleTag) || '';
+    const scripts = readExtensionPreviewScripts(
+      MARKDOWN_STYLESHEETS_EXTENSION_ID,
+      './scripts/copy-code-button.js',
+    );
     const title = path.basename(uri.fsPath);
     const source = exportFilename
       ? path.relative(path.dirname(exportFilename), uri.fsPath).replace(/\\/g, '/')
@@ -338,6 +352,8 @@ export function makeHtml(data: string, uri: vscode.Uri, exportFilename?: string)
       style: style,
       mermaidServer: getConfig<string>('mermaidServer', 'https://unpkg.com/mermaid/dist/mermaid.min.js', uri),
       source: source,
+      bodyClass: themeContext.bodyClass,
+      scripts: scripts,
     });
     return utils.renderTemplate(template, view);
   } catch (error) {
@@ -346,26 +362,121 @@ export function makeHtml(data: string, uri: vscode.Uri, exportFilename?: string)
   }
 }
 
-function readStyles(uri: vscode.Uri, htmlBody: string): string | undefined {
+function getExtensionContributedAssets(
+  extensionId: string,
+  contributionKey: 'markdown.previewStyles' | 'markdown.previewScripts',
+  fallbackRelativePath: string,
+): string[] {
+  const ext = vscode.extensions?.getExtension?.(extensionId);
+  if (!ext || !ext.extensionPath) {
+    return [];
+  }
+  const pkg = ext.packageJSON as Record<string, unknown> | undefined;
+  const contributes = pkg?.contributes as Record<string, unknown> | undefined;
+  const contributed = contributes?.[contributionKey];
+  const resolvedPaths: string[] = [];
+
+  if (Array.isArray(contributed)) {
+    for (const rel of contributed) {
+      if (typeof rel === 'string' && rel.trim()) {
+        const candidate = path.resolve(ext.extensionPath, rel.trim());
+        if (fs.existsSync(candidate)) {
+          resolvedPaths.push(candidate);
+        }
+      }
+    }
+  }
+
+  if (resolvedPaths.length === 0 && fallbackRelativePath) {
+    const fallback = path.resolve(ext.extensionPath, fallbackRelativePath);
+    if (fs.existsSync(fallback)) {
+      resolvedPaths.push(fallback);
+    }
+  }
+
+  return resolvedPaths;
+}
+
+function readExtensionPreviewScripts(extensionId: string, fallbackRelativePath: string): string {
+  const scriptPaths = getExtensionContributedAssets(
+    extensionId,
+    'markdown.previewScripts',
+    fallbackRelativePath,
+  );
+  let scripts = '';
+  for (const scriptPath of scriptPaths) {
+    const content = utils.readFile(scriptPath);
+    if (typeof content === 'string' && content.trim()) {
+      const safeContent = content.replace(/<\/script>/gi, '<\\/script>');
+      scripts += `\n<script>\n${safeContent}\n</script>\n`;
+    }
+  }
+  return scripts;
+}
+
+function applyMarkdownAlertExtension(md: markdownIt): void {
+  const alertExt = vscode.extensions?.getExtension?.(MARKDOWN_ALERT_EXTENSION_ID);
+  if (!alertExt) {
+    return;
+  }
+  try {
+    const exportsObj = alertExt.exports as
+      | { extendMarkdownIt?: (instance: markdownIt) => markdownIt }
+      | undefined;
+    if (exportsObj && typeof exportsObj.extendMarkdownIt === 'function') {
+      exportsObj.extendMarkdownIt(md);
+      return;
+    }
+
+    const pkg = alertExt.packageJSON as { main?: string } | undefined;
+    const mainRel = pkg?.main || './dist/extension.js';
+    const mainPath = path.resolve(alertExt.extensionPath, mainRel);
+    if (fs.existsSync(mainPath)) {
+      const mod = runtimeRequire(mainPath) as {
+        activate?: (ctx: vscode.ExtensionContext) => {
+          extendMarkdownIt?: (instance: markdownIt) => markdownIt;
+        };
+      };
+      const api = mod?.activate?.({ subscriptions: [] } as unknown as vscode.ExtensionContext);
+      if (api && typeof api.extendMarkdownIt === 'function') {
+        api.extendMarkdownIt(md);
+      }
+    }
+  } catch (error) {
+    logger.logWarn(`Failed to load ${MARKDOWN_ALERT_EXTENSION_ID}: ${logger.formatError(error)}`);
+  }
+}
+
+function readStyles(uri: vscode.Uri, htmlBody: string, rootVarsStyleTag: string): string | undefined {
   try {
     const includeDefaultStyles = getConfig<boolean>('includeDefaultStyles', true, uri);
     const highlightStyle = getConfig<string>('highlightStyle', '', uri);
     const highlight = getConfig<boolean>('highlight', true, uri);
     const markdownStyles = vscode.workspace.getConfiguration('markdown', uri).get<string[]>('styles') || [];
     const customStyles = getConfig<string[]>('styles', [], uri);
-    const themeKind = vscode.window.activeColorTheme.kind;
-    const isDarkTheme =
-      themeKind === vscode.ColorThemeKind.Dark || themeKind === vscode.ColorThemeKind.HighContrast;
+    const extensionPreviewStyleFiles = [
+      ...getExtensionContributedAssets(
+        MARKDOWN_ALERT_EXTENSION_ID,
+        'markdown.previewStyles',
+        './styles/markdown-alert.css',
+      ),
+      ...getExtensionContributedAssets(
+        MARKDOWN_STYLESHEETS_EXTENSION_ID,
+        'markdown.previewStyles',
+        './styles/markdown-preview-layout.css',
+      ),
+    ];
 
     let style =
       utils.buildStyleTags({
         includeDefaultStyles,
-        isDarkTheme,
         highlight,
         highlightStyle,
         markdownStyles,
         customStyles,
         baseDir: EXTENSION_ROOT,
+        rootVarsStyleTag,
+        extensionPreviewStyleFiles,
         onMissingHighlightStyle: (requestedStyle: string, resolvedStyle: string) => {
           vscode.window.showWarningMessage(
             `Markdown HTML: highlightStyle "${requestedStyle}" was not found; falling back to "${resolvedStyle}".`,

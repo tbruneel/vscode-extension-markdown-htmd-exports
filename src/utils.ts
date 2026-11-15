@@ -216,7 +216,7 @@ export function resolveHref(href: string | undefined | null, resourceFsPath: str
   } catch {
     // Not a valid absolute URL
   }
-  if (protocol === 'http:' || protocol === 'https:' || protocol === 'data:') {
+  if (protocol === 'http:' || protocol === 'https:' || protocol === 'data:' || protocol === 'file:') {
     return href;
   }
 
@@ -284,21 +284,22 @@ function resolveHighlightStyle(baseDir: string, highlightStyle: string): { filen
   }
 
   return {
-    filename: path.join(baseDir, 'styles', 'tomorrow.css'),
+    filename: path.join(baseDir, 'styles', 'vscode-highlight.css'),
     requestedStyle: highlightStyle,
-    resolvedStyle: 'tomorrow.css',
+    resolvedStyle: 'vscode-highlight.css',
     usedFallback: true,
   };
 }
 
 export interface BuildStyleTagsOptions {
   includeDefaultStyles: boolean;
-  isDarkTheme?: boolean;
   highlight: boolean;
   highlightStyle: string;
   markdownStyles: string[] | string;
   customStyles: string[] | string;
   baseDir: string;
+  rootVarsStyleTag?: string;
+  extensionPreviewStyleFiles?: string[];
   onMissingHighlightStyle?: (requestedStyle: string, resolvedStyle: string) => void;
   resolveHrefFn: (href: string) => string;
 }
@@ -320,22 +321,42 @@ function inlineOrLinkStylesheet(resolvedHref: string): string {
   return '<link rel="stylesheet" href="' + resolvedHref + '" type="text/css">';
 }
 
-/** Builds the concatenated <style> tags for syntax highlighting, markdown.styles, customStyles, or the active VS Code 2026 fallback theme. */
+/**
+ * Builds the ordered `<style>` / `<link>` cascade matching VS Code's Markdown preview:
+ * 1. Resolved active VS Code theme `:root` CSS variables
+ * 2. Bundled `vscode-markdown.css` base styles (when `includeDefaultStyles` is enabled)
+ * 3. Syntax highlighting (`vscode-highlight.css` or explicit `highlightStyle`)
+ * 4. Companion extension `markdown.previewStyles` (e.g., `markdown-alert`, `markdown-stylesheets`)
+ * 5. `markdown.styles` and `markdown-html.styles`
+ */
 export function buildStyleTags(options: BuildStyleTagsOptions): string {
   let style = '';
-  let filename = '';
+
+  if (options.rootVarsStyleTag) {
+    style += '\n' + options.rootVarsStyleTag + '\n';
+  }
+
+  if (options.includeDefaultStyles) {
+    style += makeCss(path.join(options.baseDir, 'styles', 'vscode-markdown.css'));
+  }
 
   if (options.highlight) {
     if (options.highlightStyle) {
       const resolvedHighlight = resolveHighlightStyle(options.baseDir, options.highlightStyle);
-      filename = resolvedHighlight.filename;
       if (options.onMissingHighlightStyle && resolvedHighlight.usedFallback) {
         options.onMissingHighlightStyle(resolvedHighlight.requestedStyle, resolvedHighlight.resolvedStyle);
       }
-      style += makeCss(filename);
+      style += makeCss(resolvedHighlight.filename);
     } else {
-      filename = path.join(options.baseDir, 'styles', 'tomorrow.css');
-      style += makeCss(filename);
+      style += makeCss(path.join(options.baseDir, 'styles', 'vscode-highlight.css'));
+    }
+  }
+
+  if (Array.isArray(options.extensionPreviewStyleFiles)) {
+    for (const previewCssPath of options.extensionPreviewStyleFiles) {
+      if (previewCssPath) {
+        style += makeCss(previewCssPath);
+      }
     }
   }
 
@@ -354,13 +375,6 @@ export function buildStyleTags(options: BuildStyleTagsOptions): string {
       const customHref = options.resolveHrefFn(options.customStyles[i]);
       style += inlineOrLinkStylesheet(customHref);
     }
-  }
-
-  if (!hasMarkdownStyles && !hasCustomStyles && options.includeDefaultStyles) {
-    const defaultThemeFile = options.isDarkTheme
-      ? 'markdown-vscode-dark2026.css'
-      : 'markdown-vscode-light2026.css';
-    style += makeCss(path.join(options.baseDir, 'styles', defaultThemeFile));
   }
 
   return style;
@@ -430,6 +444,8 @@ interface HtmlViewDataConfig {
   content: string;
   mermaidServer: string;
   source?: string;
+  bodyClass?: string;
+  scripts?: string;
 }
 
 export function escapeHtmlAttr(value: string): string {
@@ -451,7 +467,9 @@ export function unescapeHtmlAttr(value: string): string {
 }
 
 /** Builds the view model passed to the HTML template renderer. Injects Mermaid script only when a mermaid diagram is present. */
-export function buildHtmlViewData(config: HtmlViewDataConfig): { title: string; style: string; content: string; mermaid: string; source: string } {
+export function buildHtmlViewData(
+  config: HtmlViewDataConfig,
+): { title: string; style: string; content: string; mermaid: string; source: string; bodyClass: string; scripts: string } {
   const hasMermaid = config.content.includes('class="mermaid"') && Boolean(config.mermaidServer);
   const mermaidBlock = hasMermaid
     ? `<script src="${config.mermaidServer}"></script>\n<script>document.addEventListener('DOMContentLoaded', function () { if (typeof mermaid !== 'undefined') { mermaid.initialize({ startOnLoad: true, theme: 'default' }); } });</script>`
@@ -462,6 +480,8 @@ export function buildHtmlViewData(config: HtmlViewDataConfig): { title: string; 
     content: config.content,
     mermaid: mermaidBlock,
     source: escapeHtmlAttr(config.source || ''),
+    bodyClass: escapeHtmlAttr(config.bodyClass || ''),
+    scripts: config.scripts || '',
   };
 }
 

@@ -20,6 +20,7 @@ const ANCHOR_NAV_SCRIPT = `
       var el = document.getElementById(id) || document.getElementsByName(id)[0];
       if (el) {
         e.preventDefault();
+        e.stopPropagation();
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
       return;
@@ -32,9 +33,10 @@ const ANCHOR_NAV_SCRIPT = `
     }
     if (vscodeApi) {
       e.preventDefault();
+      e.stopPropagation();
       vscodeApi.postMessage({ type: 'openRelativeLink', href: href });
     }
-  });
+  }, true);
 })();
 </script>
 `;
