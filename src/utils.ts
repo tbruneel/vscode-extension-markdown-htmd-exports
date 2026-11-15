@@ -429,10 +429,29 @@ interface HtmlViewDataConfig {
   style: string;
   content: string;
   mermaidServer: string;
+  source?: string;
+}
+
+export function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+export function unescapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
 }
 
 /** Builds the view model passed to the HTML template renderer. Injects Mermaid script only when a mermaid diagram is present. */
-export function buildHtmlViewData(config: HtmlViewDataConfig): { title: string; style: string; content: string; mermaid: string } {
+export function buildHtmlViewData(config: HtmlViewDataConfig): { title: string; style: string; content: string; mermaid: string; source: string } {
   const hasMermaid = config.content.includes('class="mermaid"') && Boolean(config.mermaidServer);
   const mermaidBlock = hasMermaid
     ? `<script src="${config.mermaidServer}"></script>\n<script>document.addEventListener('DOMContentLoaded', function () { if (typeof mermaid !== 'undefined') { mermaid.initialize({ startOnLoad: true, theme: 'default' }); } });</script>`
@@ -442,6 +461,7 @@ export function buildHtmlViewData(config: HtmlViewDataConfig): { title: string; 
     style: config.style,
     content: config.content,
     mermaid: mermaidBlock,
+    source: escapeHtmlAttr(config.source || ''),
   };
 }
 
@@ -486,24 +506,104 @@ export function parseFrontMatter(text: string): { data: Record<string, unknown>;
   };
 }
 
-/** Converts a .md / .markdown file path into its target .md.html file path. */
-export function toMdHtmlFilename(mdFilename: string): string {
-  if (/\.md$/i.test(mdFilename)) {
-    return mdFilename + '.html';
-  }
+/** Converts a .md / .markdown file path into its target .htmd file path. */
+export function toHtmdFilename(mdFilename: string): string {
   const ext = path.extname(mdFilename);
   if (ext) {
-    return mdFilename.slice(0, -ext.length) + '.md.html';
+    return mdFilename.slice(0, -ext.length) + '.htmd';
   }
-  return mdFilename + '.md.html';
+  return mdFilename + '.htmd';
 }
 
-/** Converts a .md.html file path back to its corresponding source .md file path. */
-export function toSourceMdFilename(mdHtmlFilename: string): string {
-  if (/\.md\.html$/i.test(mdHtmlFilename)) {
-    return mdHtmlFilename.slice(0, -'.html'.length);
+/**
+ * Rewrites relative or file:// .md / .markdown link targets to .htmd while
+ * preserving query strings and #fragments. External URLs and pure #anchors
+ * are left untouched.
+ */
+export function rewriteMarkdownLinkHref(href: string): string {
+  const trimmed = href.trim();
+  if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) {
+    return href;
   }
-  return mdHtmlFilename.replace(/\.html$/i, '') + '.md';
+
+  const schemeMatch = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed);
+  if (schemeMatch) {
+    const isWindowsDrive = /^[a-z]:[\\/]/i.test(trimmed);
+    const isFileScheme = schemeMatch[1].toLowerCase() === 'file';
+    if (!isWindowsDrive && !isFileScheme) {
+      return href;
+    }
+  }
+
+  const hashIdx = trimmed.indexOf('#');
+  const preHash = hashIdx >= 0 ? trimmed.slice(0, hashIdx) : trimmed;
+  const hashPart = hashIdx >= 0 ? trimmed.slice(hashIdx) : '';
+
+  const queryIdx = preHash.indexOf('?');
+  const pathPart = queryIdx >= 0 ? preHash.slice(0, queryIdx) : preHash;
+  const queryPart = queryIdx >= 0 ? preHash.slice(queryIdx) : '';
+
+  if (!/\.(md|markdown)$/i.test(pathPart)) {
+    return href;
+  }
+
+  return pathPart.replace(/\.(md|markdown)$/i, '.htmd') + queryPart + hashPart;
+}
+
+/**
+ * Rewrites .md / .markdown href attributes inside raw HTML <a> tags to .htmd,
+ * leaving non-<a> tags, non-href attributes, and external URLs untouched.
+ */
+export function rewriteHtmlAnchorHrefs(html: string): string {
+  if (!html || !/<a[\s>]/i.test(html)) {
+    return html;
+  }
+  return html.replace(/<a\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi, function (tag) {
+    return tag.replace(/(\s+href\s*=\s*)(?:"([^"]*)"|'([^']*)')/gi, function (_attrMatch, prefix: string, dq: string | undefined, sq: string | undefined) {
+      const quote = dq !== undefined ? '"' : "'";
+      const rawHref = dq !== undefined ? dq : sq!;
+      return prefix + quote + rewriteMarkdownLinkHref(rawHref) + quote;
+    });
+  });
+}
+
+/** Converts a .htmd file path back to its default corresponding source .md file path. */
+export function toSourceMdFilename(htmdFilename: string): string {
+  if (/\.htmd$/i.test(htmdFilename)) {
+    return htmdFilename.slice(0, -'.htmd'.length) + '.md';
+  }
+  const ext = path.extname(htmdFilename);
+  if (ext) {
+    return htmdFilename.slice(0, -ext.length) + '.md';
+  }
+  return htmdFilename + '.md';
+}
+
+/** Resolves the source Markdown path using embedded metadata when available, falling back to sibling .md. */
+export function resolveSourceMdFilename(htmdFilename: string): string {
+  try {
+    const fd = fs.openSync(htmdFilename, 'r');
+    try {
+      const buf = Buffer.alloc(1024);
+      const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
+      const head = buf.slice(0, bytesRead).toString('utf-8');
+      const match = /<meta[^>]*name="generator"[^>]*content="vscode-markdown-html"[^>]*data-source="([^"]+)"/i.exec(head);
+      if (match) {
+        const rawSource = unescapeHtmlAttr(match[1]);
+        if (rawSource) {
+          const candidate = path.resolve(path.dirname(htmdFilename), rawSource);
+          if (isExistsPath(candidate)) {
+            return candidate;
+          }
+        }
+      }
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    // Fall back to sibling .md resolution
+  }
+  return toSourceMdFilename(htmdFilename);
 }
 
 // Sanitize mode for raw HTML in Markdown. 'gfm' removes dangerous tags per

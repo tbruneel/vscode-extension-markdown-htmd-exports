@@ -1,17 +1,17 @@
 {
   "name": "markdown-html",
   "displayName": "Markdown HTML",
-  "description": "Exports Markdown files (.md) to self-contained Markdown files (.md.html) which are automatically opened by VS Code's built-in web browser.",
+  "description": "Exports Markdown files (.md) to self-contained Markdown HTML files (.htmd) which open automatically in VS Code's built-in viewer and your default web browser.",
   "version": "1.0.0",
   "publisher": "tbruneel",
   "license": "MIT",
-  "homepage": "https://github.com/tbruneel/vscode-markdown-html#readme",
+  "homepage": "https://github.com/tbruneel/vscode-extension-markdown-html#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tbruneel/vscode-markdown-html.git"
+    "url": "https://github.com/tbruneel/vscode-extension-markdown-html.git"
   },
   "bugs": {
-    "url": "https://github.com/tbruneel/vscode-markdown-html/issues"
+    "url": "https://github.com/tbruneel/vscode-extension-markdown-html/issues"
   },
   "engines": {
     "vscode": "^1.80.0"
@@ -28,6 +28,7 @@
     "mermaid"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:extension.markdown-html.export",
     "onCommand:extension.markdown-html.showSource",
     "onCustomEditor:markdown-html.viewer",
@@ -35,13 +36,21 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "languages": [
+      {
+        "id": "html",
+        "extensions": [
+          ".htmd"
+        ]
+      }
+    ],
     "customEditors": [
       {
         "viewType": "markdown-html.viewer",
         "displayName": "Markdown HTML Viewer",
         "selector": [
           {
-            "filenamePattern": "*.md.html"
+            "filenamePattern": "*.htmd"
           }
         ],
         "priority": "default"
@@ -114,12 +123,12 @@
             "never"
           ],
           "enumDescriptions": [
-            "Automatically update <file>.md.html on save only if <file>.md.html already exists next to the Markdown file.",
-            "Always create or update <file>.md.html whenever a Markdown file is saved.",
+            "Automatically update <file>.htmd on save only if <file>.htmd already exists next to the Markdown file.",
+            "Always create or update <file>.htmd whenever a Markdown file is saved.",
             "Only export manually via the 'Markdown HTML: Export' command."
           ],
           "default": "ifExists",
-          "description": "Control automatic .md.html export when saving a Markdown (.md) file."
+          "description": "Control automatic .htmd export when saving a Markdown (.md) file."
         },
         "markdown-html.convertOnSaveExclude": {
           "type": "array",
@@ -135,7 +144,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Local paths or URLs to CSS stylesheets to inline into the exported .md.html file."
+          "description": "Local paths or URLs to CSS stylesheets to inline into the exported .htmd file."
         },
         "markdown-html.stylesRelativePathFile": {
           "type": "boolean",
@@ -150,7 +159,7 @@
         "markdown-html.outputDirectory": {
           "type": "string",
           "default": "",
-          "description": "Optional output directory for exported .md.html files."
+          "description": "Optional output directory for exported .htmd files."
         },
         "markdown-html.outputDirectoryRelativePathFile": {
           "type": "boolean",
@@ -222,7 +231,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^25.5.2",
-    "@types/vscode": "^1.110.0",
+    "@types/vscode": "^1.80.0",
     "esbuild": "^0.28.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"

@@ -1,8 +1,8 @@
 // Installs html_block / html_inline renderer rules that sanitize raw HTML via
-// utils.sanitizeRawHtml, accumulating a removal/strip report. Kept free of any
-// 'vscode' import so it stays unit-testable with markdown-it under tsx.
+// utils.sanitizeRawHtml and rewrite relative .md links via utils.rewriteHtmlAnchorHrefs.
+// Kept free of any 'vscode' import so it stays unit-testable with markdown-it under tsx.
 import type MarkdownIt from 'markdown-it';
-import { sanitizeRawHtml, SanitizeMode, SanitizeReport } from './utils';
+import { sanitizeRawHtml, rewriteHtmlAnchorHrefs, SanitizeMode, SanitizeReport } from './utils';
 
 export function installSanitizeRules(
   md: MarkdownIt,
@@ -14,7 +14,7 @@ export function installSanitizeRules(
     const result = sanitizeRawHtml(content, mode, { removeWithContent: removeWithContent });
     report.removedElements.push(...result.report.removedElements);
     report.strippedAttributes.push(...result.report.strippedAttributes);
-    return result.html;
+    return rewriteHtmlAnchorHrefs(result.html);
   }
 
   md.renderer.rules.html_block = function (tokens, idx) {

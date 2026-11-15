@@ -1,25 +1,41 @@
 import * as vscode from 'vscode';
 import fs from 'fs';
 import path from 'path';
+import * as utils from './utils';
 
 const ANCHOR_NAV_SCRIPT = `
 <script>
-document.addEventListener('click', function (e) {
-  var target = e.target;
-  while (target && target.tagName !== 'A') {
-    target = target.parentElement;
-  }
-  if (!target) return;
-  var href = target.getAttribute('href');
-  if (href && href.charAt(0) === '#' && href.length > 1) {
-    var id = decodeURIComponent(href.slice(1));
-    var el = document.getElementById(id) || document.getElementsByName(id)[0];
-    if (el) {
-      e.preventDefault();
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+(function () {
+  var vscodeApi = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
+  document.addEventListener('click', function (e) {
+    var target = e.target;
+    while (target && target.tagName !== 'A') {
+      target = target.parentElement;
     }
-  }
-});
+    if (!target) return;
+    var href = target.getAttribute('href');
+    if (!href) return;
+    if (href.charAt(0) === '#' && href.length > 1) {
+      var id = decodeURIComponent(href.slice(1));
+      var el = document.getElementById(id) || document.getElementsByName(id)[0];
+      if (el) {
+        e.preventDefault();
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      return;
+    }
+    if (href.indexOf('//') === 0) return;
+    var schemeMatch = /^([a-z][a-z0-9+.-]*):/i.exec(href);
+    var isWindowsDrive = /^[a-z]:[\\\\/]/i.test(href);
+    if (schemeMatch && !isWindowsDrive && schemeMatch[1].toLowerCase() !== 'file') {
+      return;
+    }
+    if (vscodeApi) {
+      e.preventDefault();
+      vscodeApi.postMessage({ type: 'openRelativeLink', href: href });
+    }
+  });
+})();
 </script>
 `;
 
@@ -113,6 +129,33 @@ export class MarkdownHtmlViewerProvider implements vscode.CustomReadonlyEditorPr
 
     webviewPanel.webview.html = MarkdownHtmlViewerProvider.loadHtml(filePath);
 
+    const messageDisposable = webviewPanel.webview.onDidReceiveMessage(async (msg: unknown) => {
+      if (!msg || typeof msg !== 'object') {
+        return;
+      }
+      const record = msg as { type?: unknown; href?: unknown };
+      if (record.type !== 'openRelativeLink' || typeof record.href !== 'string') {
+        return;
+      }
+      const rawPath = record.href.split('#')[0].split('?')[0].trim();
+      if (!rawPath) {
+        return;
+      }
+      let decoded = rawPath;
+      try {
+        decoded = decodeURIComponent(rawPath);
+      } catch {
+        // Keep rawPath when URI decoding fails.
+      }
+      let candidate = utils.stripFileProtocol(decoded);
+      if (!path.isAbsolute(candidate) && !path.win32.isAbsolute(candidate)) {
+        candidate = path.resolve(path.dirname(filePath), candidate);
+      }
+      if (fs.existsSync(candidate)) {
+        await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(candidate));
+      }
+    });
+
     const watcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(path.dirname(filePath), path.basename(filePath)),
     );
@@ -123,6 +166,7 @@ export class MarkdownHtmlViewerProvider implements vscode.CustomReadonlyEditorPr
     watcher.onDidCreate(reload);
 
     webviewPanel.onDidDispose(() => {
+      messageDisposable.dispose();
       watcher.dispose();
       if (MarkdownHtmlViewerProvider.activeFilePath === filePath) {
         MarkdownHtmlViewerProvider.activeFilePath = undefined;

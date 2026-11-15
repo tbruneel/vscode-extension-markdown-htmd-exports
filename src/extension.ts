@@ -1,5 +1,5 @@
-// VS Code extension entry point: exports Markdown (.md) to self-contained .md.html
-// files (manually or automatically on save) and provides a built-in rendered viewer for *.md.html.
+// VS Code extension entry point: exports Markdown (.md) to self-contained .htmd
+// files (manually or automatically on save) and provides a built-in rendered viewer for *.htmd.
 import * as vscode from 'vscode';
 import path from 'path';
 import fs from 'fs';
@@ -18,9 +18,11 @@ import { mathFencePlugin } from './markdown-it-math-fence';
 import { mathBracketsPlugin } from './markdown-it-math-brackets';
 import { renderMath } from './math-renderer';
 import { MarkdownHtmlViewerProvider } from './html-viewer';
+import { ensureWindowsHtmdAssociation } from './windows-association';
 
 const EXTENSION_ROOT = path.join(__dirname, '..');
 const SHOW_DETAILS_ACTION = 'Show Details';
+const ASSOC_INIT_KEY = 'htmdAssociationInitialized';
 
 function getConfig<T>(key: string, defaultValue: T, resource?: vscode.Uri): T {
   return vscode.workspace.getConfiguration('markdown-html', resource).get<T>(key, defaultValue);
@@ -31,6 +33,12 @@ export function activate(context: vscode.ExtensionContext): void {
     context,
     () => vscode.window.createOutputChannel('Markdown HTML', { log: true }),
   );
+
+  if (process.platform === 'win32' && !context.globalState.get<boolean>(ASSOC_INIT_KEY, false)) {
+    void ensureWindowsHtmdAssociation(logger.logInfo, logger.logWarn)
+      .then(() => context.globalState.update(ASSOC_INIT_KEY, true))
+      .catch((err) => logger.logWarn('Failed to register .htmd file association', logger.formatError(err)));
+  }
 
   context.subscriptions.push(
     MarkdownHtmlViewerProvider.register(context),
@@ -64,7 +72,7 @@ async function onDidSaveMarkdownDocument(document: vscode.TextDocument): Promise
     return;
   }
 
-  const targetFilename = getOutputPath(utils.toMdHtmlFilename(document.uri.fsPath), document.uri);
+  const targetFilename = getOutputPath(utils.toHtmdFilename(document.uri.fsPath), document.uri);
   if (!targetFilename) {
     return;
   }
@@ -100,7 +108,7 @@ async function exportMarkdownCommand(uri?: vscode.Uri, isOnSave = false): Promis
       return;
     }
 
-    const targetFilename = getOutputPath(utils.toMdHtmlFilename(document.uri.fsPath), document.uri);
+    const targetFilename = getOutputPath(utils.toHtmdFilename(document.uri.fsPath), document.uri);
     if (!targetFilename) {
       return;
     }
@@ -127,11 +135,11 @@ async function showSourceCommand(uri?: vscode.Uri): Promise<void> {
     }
 
     if (!htmlFilePath) {
-      vscode.window.showWarningMessage('Markdown HTML: No active .md.html viewer.');
+      vscode.window.showWarningMessage('Markdown HTML: No active .htmd viewer.');
       return;
     }
 
-    const mdFilePath = utils.toSourceMdFilename(htmlFilePath);
+    const mdFilePath = utils.resolveSourceMdFilename(htmlFilePath);
     if (!utils.isExistsPath(mdFilePath)) {
       vscode.window.showWarningMessage(
         `Markdown HTML: Source Markdown file not found (${path.basename(mdFilePath)}).`,
@@ -152,7 +160,7 @@ async function showSourceCommand(uri?: vscode.Uri): Promise<void> {
 }
 
 /**
- * Exports a Markdown file on disk or from a TextDocument to its target .md.html file.
+ * Exports a Markdown file on disk or from a TextDocument to its target .htmd file.
  */
 export function exportDocumentToHtml(
   document: vscode.TextDocument,
@@ -168,7 +176,7 @@ export function exportDocumentToHtml(
     return;
   }
 
-  const html = makeHtml(converted.html, document.uri);
+  const html = makeHtml(converted.html, document.uri, exportFilename);
   if (html === undefined) {
     return;
   }
@@ -221,7 +229,7 @@ export function convertMarkdownToHtml(
       }) as markdownIt.Options,
     );
 
-    // Inline local images as base64 data: URIs so .md.html is 100% self-contained
+    // Inline local images as base64 data: URIs so .htmd is 100% self-contained
     const defaultRender = md.renderer.rules.image;
     md.renderer.rules.image = function (tokens, idx, options, env, self) {
       const token = tokens[idx];
@@ -231,6 +239,21 @@ export function convertMarkdownToHtml(
         token.attrs[srcIdx][1] = utils.inlineImageHref(href, filename);
       }
       return defaultRender!(tokens, idx, options, env, self);
+    };
+
+    // Rewrite relative .md / .markdown link targets to .htmd so links open formatted exports
+    const defaultLinkOpen =
+      md.renderer.rules.link_open ||
+      function (tokens, idx, options, _env, self) {
+        return self.renderToken(tokens, idx, options);
+      };
+    md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
+      const token = tokens[idx];
+      const hrefIdx = token.attrIndex('href');
+      if (hrefIdx >= 0 && token.attrs) {
+        token.attrs[hrefIdx][1] = utils.rewriteMarkdownLinkHref(token.attrs[hrefIdx][1]);
+      }
+      return defaultLinkOpen(tokens, idx, options, env, self);
     };
 
     const sanitizeReport: utils.SanitizeReport = { removedElements: [], strippedAttributes: [] };
@@ -299,10 +322,13 @@ export function convertMarkdownToHtml(
   }
 }
 
-export function makeHtml(data: string, uri: vscode.Uri): string | undefined {
+export function makeHtml(data: string, uri: vscode.Uri, exportFilename?: string): string | undefined {
   try {
     const style = readStyles(uri, data) || '';
     const title = path.basename(uri.fsPath);
+    const source = exportFilename
+      ? path.relative(path.dirname(exportFilename), uri.fsPath).replace(/\\/g, '/')
+      : path.basename(uri.fsPath);
     const templatePath = path.join(EXTENSION_ROOT, 'template', 'template.html');
     const template = utils.readFile(templatePath) as string;
 
@@ -311,6 +337,7 @@ export function makeHtml(data: string, uri: vscode.Uri): string | undefined {
       title: title,
       style: style,
       mermaidServer: getConfig<string>('mermaidServer', 'https://unpkg.com/mermaid/dist/mermaid.min.js', uri),
+      source: source,
     });
     return utils.renderTemplate(template, view);
   } catch (error) {
